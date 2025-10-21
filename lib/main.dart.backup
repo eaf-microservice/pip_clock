@@ -1,0 +1,355 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_background/flutter_background.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
+
+// Background task callback
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    if (task == 'updateClock') {
+      final now = DateTime.now();
+      if (now.minute == 0) {
+        await _playAlarm();
+      }
+    }
+    return Future.value(true);
+  });
+}
+
+// Alarm player function
+@pragma('vm:entry-point')
+Future<void> _playAlarm() async {
+  final player = AudioPlayer();
+  try {
+    await player.play(AssetSource('sounds/alarm.mp3'));
+    await Future.delayed(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint('Error playing alarm: $e');
+  } finally {
+    await player.dispose();
+  }
+}
+
+void main() async {
+  // Ensure Flutter binding is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Initialize services
+    await _initializeServices();
+
+    // Start the app
+    runApp(const PipClockApp());
+  } catch (e) {
+    debugPrint('Error initializing app: $e');
+    // Fallback UI in case of initialization error
+    runApp(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text('Failed to initialize app. Please restart.'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _initializeServices() async {
+  // Initialize shared preferences
+  await SharedPreferences.getInstance();
+
+  // Request permissions
+  if (Platform.isAndroid) {
+    final statuses = await [
+      Permission.notification,
+      Permission.ignoreBatteryOptimizations,
+    ].request();
+
+    // Log permission statuses for debugging
+    statuses.forEach((permission, status) {
+      debugPrint('$permission: $status');
+    });
+  }
+
+  // Initialize background services
+  await _initializeBackground();
+
+  // Initialize foreground task
+  await _initializeForegroundTask();
+}
+
+Future<void> _initializeBackground() async {
+  if (Platform.isAndroid) {
+    final androidConfig = FlutterBackgroundAndroidConfig(
+      notificationTitle: 'Pip Clock',
+      notificationText: 'Running in background',
+      notificationImportance: AndroidNotificationImportance.Low,
+      notificationIcon: const AndroidResource(
+        name: 'ic_launcher',
+        defType: 'mipmap',
+      ),
+    );
+
+    try {
+      final hasPermission = await FlutterBackground.hasPermissions;
+      if (!hasPermission) {
+        await FlutterBackground.initialize(androidConfig: androidConfig);
+      }
+      await FlutterBackground.enableBackgroundExecution();
+    } catch (e) {
+      debugPrint('Background initialization error: $e');
+    }
+  }
+
+  // Initialize WorkManager for periodic tasks
+  await Workmanager().initialize(
+    callbackDispatcher,
+    isInDebugMode: false,
+  );
+
+  await Workmanager().registerPeriodicTask(
+    'pip_clock_task',
+    'updateClock',
+    frequency: const Duration(minutes: 15),
+    constraints: Constraints(
+      networkType: NetworkType.not_required,
+      requiresBatteryNotLow: false,
+      requiresCharging: false,
+      requiresDeviceIdle: false,
+    ),
+  );
+}
+
+Future<void> _initializeForegroundTask() async {
+  try {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'pip_clock_channel',
+        channelName: 'Pip Clock Service',
+        channelDescription: 'Notification for Pip Clock',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        iconData: const NotificationIconData(
+          resType: ResourceType.mipmap,
+          resPrefix: ResourcePrefix.ic,
+          name: 'launcher',
+        ),
+      ),
+      iosNotificationOptions: null,
+      foregroundTaskOptions: null,
+    );
+  } catch (e) {
+    debugPrint('Foreground task initialization error: $e');
+  }
+}
+
+class PipClockApp extends StatelessWidget {
+  const PipClockApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Pip Clock',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: const HomeScreen(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  DateTime _currentTime = DateTime.now();
+  Timer? _timer;
+  bool _isAlarmRunning = false;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _hasAlarmStarted = false; // Flag to track alarm status
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this); // Register observer
+    _updateTime();
+
+    // Start the foreground service
+    FlutterForegroundTask.startService(
+      notificationTitle: 'Pip Clock',
+      notificationText: 'Running in background',
+      callback: startCallback,
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // App is in the background
+      FlutterBackground.enableBackgroundExecution();
+    } else if (state == AppLifecycleState.resumed) {
+      // App is back in the foreground
+      FlutterBackground.disableBackgroundExecution();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // Unregister observer
+    _timer?.cancel();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  // Update time every second and check if it's top of the hour
+  void _updateTime() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _currentTime = DateTime.now();
+      });
+
+      // Start alarm only once when the minute is 00
+      if (_currentTime.minute == 0 && !_hasAlarmStarted) {
+        _startAlarm();
+        _hasAlarmStarted = true;
+      }
+
+      // Reset alarm flag when minute changes
+      if (_currentTime.minute != 0) {
+        _hasAlarmStarted = false;
+      }
+    });
+  }
+
+  // Start the alarm manually
+  Future<void> _startAlarm() async {
+    setState(() {
+      _isAlarmRunning = true;
+    });
+    await _playAlarm();
+  }
+
+  // Play alarm sound
+  Future<void> _playAlarm() async {
+    try {
+      await _audioPlayer.play(AssetSource('default.mp3'));
+    } catch (e) {
+      print('Error playing sound: $e');
+    }
+  }
+
+  // Stop the alarm manually
+  void _stopAlarm() {
+    _audioPlayer.stop();
+    setState(() {
+      _isAlarmRunning = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/clock.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          // appBar: AppBar(
+          //   backgroundColor: Colors.transparent,
+          //   title: const Text(
+          //     'Pip Clock',
+          //     style: TextStyle(color: Color.fromRGBO(215, 179, 220, 1.0)),
+          //   ),
+          // ),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                const Text(
+                  'Current Time:',
+                  style: TextStyle(
+                      fontSize: 24, color: Color.fromRGBO(255, 255, 255, 1.0)),
+                ),
+                Text(
+                  '${_currentTime.hour.toString().padLeft(2, '0')}:${_currentTime.minute.toString().padLeft(2, '0')}:${_currentTime.second.toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                      fontSize: 48, color: Color.fromRGBO(255, 255, 255, 1.0)),
+                ),
+                const SizedBox(height: 30),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    side: BorderSide(
+                        color: _isAlarmRunning ? Colors.green : Colors.red,
+                        width: 2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    shadowColor: Colors.transparent,
+                  ),
+                  onPressed: _isAlarmRunning ? _stopAlarm : _startAlarm,
+                  child: SizedBox(
+                    width: 200.0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.arrow_circle_right_outlined,
+                            color: Color.fromRGBO(255, 255, 255, 1.0)),
+                        const SizedBox(width: 5.0),
+                        Text(
+                          _isAlarmRunning ? 'Stop Tonality' : 'Start Tonality',
+                          style: const TextStyle(
+                            color: Color.fromRGBO(255, 255, 255, 1.0),
+                            fontSize: 14.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 5.0),
+                        const Icon(Icons.arrow_circle_left_outlined,
+                            color: Color.fromRGBO(255, 255, 255, 1.0)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Traffic light indicator
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _isAlarmRunning ? Colors.green : Colors.red,
+                  ),
+                  child: const Center(
+                      child: Text(
+                    'Pip Clock',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  )),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
