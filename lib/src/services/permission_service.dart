@@ -9,12 +9,14 @@ class PermissionService {
     if (Platform.isAndroid) {
       await Permission.ignoreBatteryOptimizations.request();
       await Permission.notification.request();
+    } else if (Platform.isIOS) {
+      await Permission.notification.request();
     }
   }
 
   /// Checks if all required permissions are granted
   static Future<bool> hasRequiredPermissions() async {
-    if (Platform.isAndroid) {
+    if (Platform.isAndroid || Platform.isIOS) {
       final status = await Permission.notification.status;
       return status.isGranted;
     }

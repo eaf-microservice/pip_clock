@@ -5,7 +5,6 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../services/alarm_service.dart';
 import '../services/permission_service.dart';
 import '../services/settings_service.dart';
-import '../widgets/alarm_status_widget.dart';
 import '../widgets/clock_widget.dart';
 import 'settings_screen.dart';
 
@@ -54,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ..setReleaseMode(ReleaseMode.stop)
       ..setAudioContext(
         AudioContext(
-          android: AudioContextAndroid(
+          android: const AudioContextAndroid(
             isSpeakerphoneOn: false,
             stayAwake: false,
             contentType: AndroidContentType.music,
@@ -143,13 +142,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _toggleAlarm() async {
-    final newState = !_isAlarmEnabled;
-    await SettingsService.setAlarmEnabled(newState);
-    setState(() {
-      _isAlarmEnabled = newState;
-    });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('[Home] AppLifecycleState changed to $state');
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (_isAlarmEnabled) {
+        _alarmService.scheduleNextHourNotification();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      _alarmService.cancelNotifications();
+    }
   }
+
+  // void _toggleAlarm() async {
+  //   final newState = !_isAlarmEnabled;
+  //   await SettingsService.setAlarmEnabled(newState);
+  //   setState(() {
+  //     _isAlarmEnabled = newState;
+  //   });
+  // }
 
   @override
   Widget build(BuildContext context) {

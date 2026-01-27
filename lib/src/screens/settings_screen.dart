@@ -44,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ..setReleaseMode(ReleaseMode.stop)
       ..setAudioContext(
         AudioContext(
-          android: AudioContextAndroid(
+          android: const AudioContextAndroid(
             isSpeakerphoneOn: true,
             stayAwake: false,
             contentType: AndroidContentType.sonification,
@@ -104,10 +104,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildDeveloperCard() {
-    const developerName = 'EAF Microservice';
+    const developerName = 'Fouad El Azbi';
+    const developerCompany = 'EAF Microservice';
     const developerEmail = 'EAF.microservice@gmail.com';
+    const developerPhone = '+212645994904';
     const developerWebsite = 'https://eaf-microservice.netlify.app/';
-    const appVersion = '1.1.6';
+    const appVersion = '2.0.1';
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -121,11 +123,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            Text('Name: $developerName'),
+            const Text('Name: $developerName'),
+            const SizedBox(height: 8),
+            const Text('Company: $developerCompany'),
             const SizedBox(height: 4),
-            Text('Email: $developerEmail'),
+            const Text('Email: $developerEmail'),
             const SizedBox(height: 4),
-            Text('Website: $developerWebsite'),
+            const Text('Phone: $developerPhone'),
+            const SizedBox(height: 4),
+            const Text('Website: $developerWebsite'),
+            const SizedBox(height: 8),
+            const Text('App version: $appVersion'),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -141,21 +149,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: const Text('Copy email'),
                 ),
                 const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () {
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'Pip Clock',
-                      applicationVersion: appVersion,
-                      children: [
-                        const SizedBox(height: 8),
-                        Text('Developer: $developerName'),
-                        Text('Website: $developerWebsite'),
-                      ],
-                    );
+                ElevatedButton(
+                  onPressed: () async {
+                    await Clipboard.setData(
+                        const ClipboardData(text: developerPhone));
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Developer phone copied')));
+                    }
                   },
-                  child: const Text('About'),
+                  child: const Text('Copy phone'),
                 ),
+                const SizedBox(width: 12),
+
+                // const SizedBox(width: 12),
+                // OutlinedButton(
+                //   onPressed: () {
+                //     showAboutDialog(
+                //       context: context,
+                //       applicationName: 'Pip Clock',
+                //       applicationVersion: appVersion,
+                //       children: [
+                //         const SizedBox(height: 8),
+                //         Text('Developer: $developerName'),
+                //         Text('Website: $developerWebsite'),
+                //       ],
+                //     );
+                //   },
+                //   child: const Text('About'),
+                // ),
               ],
             ),
           ],

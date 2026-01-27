@@ -104,7 +104,6 @@ class PipClockTaskHandler extends TaskHandler {
     final hh = now.hour.toString().padLeft(2, '0');
     final mm = now.minute.toString().padLeft(2, '0');
     // Diagnostic log to confirm background task is running
-    print('[BackgroundService] Updating notification: $hh:$mm');
     await FlutterForegroundTask.updateService(
       notificationTitle: 'Pip Clock • $hh:$mm',
       notificationText: 'Tap to open',

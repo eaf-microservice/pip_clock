@@ -1,3 +1,13 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+// Load signing properties from android/key.properties (created by you)
+val keystorePropertiesFile = file("../key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,7 +17,7 @@ plugins {
 
 android {
     namespace = "com.eafmicroservice.pip_oclock"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34 //flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -31,21 +41,27 @@ android {
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "../upload-keystore.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "El@2b!/Ch0ukl@7"
-            keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "El@2b!/Ch0ukl@7"
-        }
-    }
-
     buildTypes {
-        getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
-            isShrinkResources = false
-            //signingConfig = signingConfigs.getByName("debug")
+        release {
+            // Use upload-keystore.jks signing config when key properties are present
+            signingConfigs {
+                // create a release signing config if properties are available
+                if (keystoreProperties.isNotEmpty()) {
+                    create("release") {
+                        val storeFilePath = keystoreProperties.getProperty("storeFile")
+                        // storeFile might be relative to android/ folder
+                        if (storeFilePath != null) {
+                            storeFile = file("../$storeFilePath")
+                        }
+                        storePassword = keystoreProperties.getProperty("storePassword")
+                        keyAlias = keystoreProperties.getProperty("keyAlias")
+                        keyPassword = keystoreProperties.getProperty("keyPassword")
+                    }
+                }
+            }
+
+            // If release signing config was created use it, otherwise fallback to debug
+            signingConfig = if (signingConfigs.findByName("release") != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
 }
