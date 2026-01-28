@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../services/alarm_service.dart';
 import '../services/permission_service.dart';
 import '../services/settings_service.dart';
@@ -110,17 +109,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       // Keep foreground notification title in sync while app is in foreground
-      try {
-        final isRunning = await FlutterForegroundTask.isRunningService;
-        if (isRunning) {
-          final hh = now.hour.toString().padLeft(2, '0');
-          final mm = now.minute.toString().padLeft(2, '0');
-          await FlutterForegroundTask.updateService(
-            notificationTitle: 'Pip Clock • $hh:$mm',
-            notificationText: 'Tap to open',
-          );
-        }
-      } catch (_) {}
+      // try {
+      //   final isRunning = await FlutterForegroundTask.isRunningService;
+      //   if (isRunning) {
+      //     final hh = now.hour.toString().padLeft(2, '0');
+      //     final mm = now.minute.toString().padLeft(2, '0');
+      //     await FlutterForegroundTask.updateService(
+      //       notificationTitle: 'Pip Clock • $hh:$mm',
+      //       notificationText: 'Tap to open',
+      //     );
+      //   }
+      // } catch (_) {}
 
       _checkAlarm(now);
     });

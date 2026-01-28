@@ -213,7 +213,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           final isRunning = snapshot.data ?? false;
           return SwitchListTile(
             title: const Text('Background Service'),
-            subtitle: const Text('Keeps hourly chime and notification active.'),
+            subtitle:
+                const Text('Keeps hourly chime.'), // and notification active
             value: isRunning,
             onChanged: (bool value) async {
               if (value) {

@@ -17,7 +17,7 @@ plugins {
 
 android {
     namespace = "com.eafmicroservice.pip_oclock"
-    compileSdk = 34 //flutter.compileSdkVersion
+    compileSdk = 36 //flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
